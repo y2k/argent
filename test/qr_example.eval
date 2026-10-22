@@ -1,0 +1,18 @@
+(ns qr-example (:require [argent.main :as main]
+                         [argent.vendor.effect :as fx]))
+(let [seen (atom [])
+      state (atom 7)
+      env (-> {}
+              (fx/register :ui:toast (fn [text] (swap! seen (fn [xs] (conj xs text)))))
+              (fx/register :state:update (fn [f] (swap! state f))))
+      node (get (main/screen (deref state)) 4)]
+  (assert (= (get node 0) :qr-image-button))
+  (((get-in node [1 :onresult]) {:err nil :value "{\"id\":123}"}) env)
+  (((get-in node [1 :onresult]) {:err :cancelled :value nil}) env)
+  (((get-in node [1 :onresult]) {:err :scan-failed :value nil}) env)
+  (assert (= (count (deref seen)) 3))
+  (assert (= (get (deref seen) 0) "{\"id\":123}"))
+  (assert (= (get (deref seen) 1) "Сканирование отменено"))
+  (assert (= (get (deref seen) 2) "Не удалось завершить сканирование"))
+  (assert (= (deref state) 7)))
+"qr example ok"

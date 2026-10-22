@@ -1,0 +1,6 @@
+(assert (argent.counter/run))
+(assert (argent.counter/messages))
+(assert (argent.counter/deferred))
+(assert (argent.counter/substituted))
+(assert (argent.counter/instance-flow))
+"counter ok"

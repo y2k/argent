@@ -1,0 +1,5 @@
+.opencode/
+.build/
+/.envrc
+/openspec/changes/archive
+/.agents/skills

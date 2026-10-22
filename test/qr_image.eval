@@ -1,0 +1,80 @@
+; Реальный запрос: ожидание подготовки, одна доставка, очистка до listener.
+(ns qr-check (:require [argent.vendor.qr_image :as qr]))
+(let [ready (atom nil)
+      decoded (atom nil)
+      scans (atom 0)
+      seen (atom [])
+      closed (atom 0)
+      operation (qr/request
+                 {:prepare (fn [next] (reset! ready next))
+                  :scan (fn [next]
+                          (swap! scans (fn [n] (+ n 1)))
+                          (reset! decoded next))
+                  :close (fn [] (swap! closed (fn [n] (+ n 1))))}
+                 (fn [result]
+                   (assert (= (deref closed) 1))
+                   (swap! seen (fn [xs] (conj xs result)))))]
+  ((:start operation))
+  (assert (= (deref scans) 0))
+  ((deref ready))
+  ((deref ready))
+  (assert (= (deref scans) 1))
+  (assert (= (count (deref seen)) 0))
+  ((deref decoded) {:err nil :value "https://example.com/item/123"})
+  ((deref decoded) {:err :cancelled :value nil})
+  (assert (= (count (deref seen)) 1))
+  (assert (= (get-in (deref seen) [0 :err]) nil))
+  (assert (= (get-in (deref seen) [0 :value]) "https://example.com/item/123"))
+  ((:stop operation))
+  (assert (= (deref closed) 1)))
+; Отмена доставляется один раз; следующий запрос успешно читает QR.
+(let [seen (atom [])
+      closed (atom 0)
+      run-scan (fn [value]
+                 (let [operation (qr/request
+                                  {:prepare (fn [next] (next))
+                                   :scan (fn [next] (next value) (next value))
+                                   :close (fn [] (swap! closed (fn [n] (+ n 1))))}
+                                  (fn [result] (swap! seen (fn [xs] (conj xs result)))))]
+                   ((:start operation))
+                   ((:stop operation))))]
+  (run-scan {:err :cancelled :value nil})
+  (assert (= (count (deref seen)) 1))
+  (assert (= (count (get (deref seen) 0)) 2))
+  (assert (= (get-in (deref seen) [0 :err]) :cancelled))
+  (assert (= (get-in (deref seen) [0 :value]) nil))
+  (run-scan {:err nil :value "{\"id\":123}"})
+  (assert (= (count (deref seen)) 2))
+  (assert (= (get-in (deref seen) [1 :err]) nil))
+  (assert (= (get-in (deref seen) [1 :value]) "{\"id\":123}"))
+  (run-scan {:err :scan-failed :value nil})
+  (assert (= (count (deref seen)) 3))
+  (assert (= (get-in (deref seen) [2 :err]) :scan-failed))
+  (assert (= (get-in (deref seen) [2 :value]) nil))
+  (assert (= (deref closed) 3)))
+; Уничтожение до подготовки или во время сканирования подавляет поздние события.
+(run! (fn [start-scan]
+        (let [ready (atom nil)
+              decoded (atom nil)
+              scans (atom 0)
+              closed (atom 0)
+              operation (qr/request
+                         {:prepare (fn [next] (reset! ready next))
+                          :scan (fn [next]
+                                  (swap! scans (fn [n] (+ n 1)))
+                                  (reset! decoded next))
+                          :close (fn [] (swap! closed (fn [n] (+ n 1))))}
+                         (fn [_result] (assert false)))]
+          ((:start operation))
+          (if start-scan ((deref ready)))
+          ((:stop operation))
+          ((deref ready))
+          (if start-scan
+            (do
+              ((deref decoded) {:err nil :value "late"})
+              ((deref decoded) {:err :cancelled :value nil})
+              ((deref decoded) {:err :scan-failed :value nil})))
+          (assert (= (deref scans) (if start-scan 1 0)))
+          (assert (= (deref closed) 1))))
+      [false true])
+"qr camera request ok"
