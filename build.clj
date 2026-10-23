@@ -8,7 +8,5 @@
  (make/makefile
   {:target "java"
    :dirs [{:path "src"
-           :build-dir ".build/bin/app/src/main/java"}
-          {:path "test"
-           :build-dir ".build/bin/test/src/main/java"}]})
+           :build-dir ".build/bin/app/src/main/java"}]})
  (android-build/build-apk {:package-id "im.y2k.argent"}))
