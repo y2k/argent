@@ -6,4 +6,7 @@
 
 (defn dispatch [key arg]
   (fn [env] (let [f (fx/summon env key)]
-              (f env arg))))
+              (eprintln (str "Argent op.begin name=" key))
+              (let [result (f env arg)]
+                (eprintln (str "Argent op.end name=" key))
+                result))))

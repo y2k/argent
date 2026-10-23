@@ -3,17 +3,14 @@
 
 (defn init [] 0)
 
-(defn update-state [f]
-  (event/dispatch :state:update f))
-
-(defn main [w]
-  (-> w
+(defn main [env]
+  (-> env
       (event/register :ui:start
                       (fn [_arg] (event/dispatch :chat:new-message nil)))
       (event/register :domain:increment
-                      (fn [_arg] (update-state (fn [state] (+ state 1)))))
+                      (fn [_arg] (event/dispatch :state:update (fn [state] (+ state 1)))))
       (event/register :domain:decrement
-                      (fn [_arg] (update-state (fn [state] (- state 1)))))))
+                      (fn [_arg] (event/dispatch :state:update (fn [state] (- state 1)))))))
 
 (defn screen [state]
   [:column {}

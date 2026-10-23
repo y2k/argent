@@ -1,5 +1,5 @@
 (ns argent.vendor.view
-  (:require [argent.vendor.event :as event]
+  (:require [argent.vendor.view_node :as node]
             [argent.vendor.effect :as fx])
   (:import [android.content Context]
            [android.view View ViewGroup]
@@ -83,20 +83,9 @@
     (.setFlexWrap layout 1)
     (add-children w layout children)))
 
-(defn- expand [node]
-  (let [[tag attrs] node
-        onresult (:onresult attrs)]
-    (if (= tag :qr-image-button)
-      [:button (assoc attrs :onclick
-                      (fn []
-                        (fn [w]
-                          ((event/dispatch :qr:pick
-                                           (fn [result] ((onresult result) w))) w))))]
-      node)))
-
 (defn create [node]
   (fn [w]
-    (let [expanded (expand node)
+    (let [expanded (node/expand node)
           [tag attrs] expanded
           children (drop 2 expanded)]
       (case tag
@@ -109,7 +98,7 @@
 
 ;; Fixed-shape screens: keep buttons attached while another tap is in flight.
 (defn update! [w ^View widget node]
-  (let [[tag attrs] (expand node)]
+  (let [[tag attrs] (node/expand node)]
     (case tag
       :text (.setText (cast TextView widget) (cast String (:text attrs)))
       :button (let [^Button button widget

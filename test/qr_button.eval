@@ -1,0 +1,52 @@
+(ns qr-button-check
+  (:require [argent.vendor.view_node :as node]
+            [argent.vendor.effect :as fx]
+            [argent.vendor.event :as event]))
+
+; Реальное преобразование узла связывает listener с окружением нажатия.
+(let [picked (atom [])
+      received (atom [])
+      env (-> {:context :current}
+              (fx/register :qr:pick
+                           (fn [listener]
+                             (swap! picked (fn [xs] (conj xs listener)))))
+              (event/register :received
+                              (fn [value]
+                                (fn [w]
+                                  (swap! received
+                                         (fn [xs] (conj xs (assoc value :context (:context w)))))))))
+      original [:qr-image-button
+                {:text "Read QR" :description "Scan QR"
+                 :onresult (fn [result] (event/dispatch :received {:listener :first :result result}))}]
+      updated [:qr-image-button
+               {:text "Read again" :description "Scan QR"
+                :onresult (fn [result] (event/dispatch :received {:listener :updated :result result}))}]
+      first-button (node/expand original)
+      next-button (node/expand updated)
+      first-click ((get-in first-button [1 :onclick]))
+      next-click ((get-in next-button [1 :onclick]))]
+  (assert (= (count (deref picked)) 0))
+  (assert (= (count (deref received)) 0))
+  (assert (= (get first-button 0) :button))
+  (assert (= (get-in first-button [1 :text]) "Read QR"))
+  (assert (= (get-in next-button [1 :text]) "Read again"))
+  (assert (= (get-in next-button [1 :description]) "Scan QR"))
+  (first-click env)
+  (next-click (assoc env :context :replacement))
+  (assert (= (count (deref picked)) 2))
+  (assert (= (count (deref received)) 0))
+  ((get (deref picked) 0) {:err nil :value "{\"id\":123}"})
+  ((get (deref picked) 1) {:err :cancelled :value nil})
+  (assert (= (count (deref received)) 2))
+  (assert (= (get-in (deref received) [0 :listener]) :first))
+  (assert (= (get-in (deref received) [0 :context]) :current))
+  (assert (= (get-in (deref received) [0 :result :err]) nil))
+  (assert (= (get-in (deref received) [0 :result :value]) "{\"id\":123}"))
+  (assert (= (get-in (deref received) [1 :listener]) :updated))
+  (assert (= (get-in (deref received) [1 :context]) :replacement))
+  (assert (= (get-in (deref received) [1 :result :err]) :cancelled))
+  (assert (= (get-in (deref received) [1 :result :value]) nil)))
+(let [text (node/expand [:text {:text "7"}])]
+  (assert (= (get text 0) :text))
+  (assert (= (get-in text [1 :text]) "7")))
+"qr button listener and environment ok"

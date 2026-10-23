@@ -15,17 +15,22 @@
                  (do
                    (reset! phase :done)
                    (reset! result nil)
-                   ((:close io)))))]
+                   ((:close io))
+                   (eprintln "Argent qr.stop"))))]
     {:start (fn []
+              (eprintln "Argent qr.prepare")
               ((:prepare io)
                (fn []
                  (if (= (deref phase) :waiting)
                    (do
                      (reset! phase :scanning)
+                     (eprintln "Argent qr.ready")
+                     (eprintln "Argent qr.scan.start")
                      ((:scan io)
                       (fn [value]
                         (if (= (deref phase) :scanning)
                           (let [deliver (deref result)]
+                            (eprintln (str "Argent qr.result status=" (or (:err value) :success)))
                             (stop)
                             (deliver value))))))))))
      :stop stop}))
@@ -60,7 +65,10 @@
          (.addOnCanceledListener task ^void:OnCanceledListener
                                  (fn [] (result {:err :cancelled :value nil})))
          (.addOnFailureListener task ^void:OnFailureListener
-                                (fn [_error] (result {:err :scan-failed :value nil})))))
+                                (fn [error]
+                                  (eprintln (str "Argent qr.error error="
+                                                 (re-replace (str error) (re-pattern "[\r\n]") " ")))
+                                  (result {:err :scan-failed :value nil})))))
      :close
      (fn []
        (let [ignored (if-let [listener (deref install-listener)]

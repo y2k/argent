@@ -1,0 +1,54 @@
+(ns pump-check
+  (:require [argent.vendor.event_pump :as pump]
+            [argent.application :as app]
+            [argent.vendor.effect :as fx]))
+
+; Подтверждение происходит после обработчика, отрисовка после подтверждения.
+(let [calls (atom [])
+      record (fn [value] (swap! calls (fn [xs] (conj xs value))))
+      instance (app/create
+                (fx/register {} :chat:render-message
+                             (fn [node]
+                               (record (str "render:" (get-in node [2 3 1 :text]))))))
+      handle (fx/summon instance :app:handle-event!)
+      render (fx/summon instance :app:render!)]
+  (pump/step {:peek (fn [] (record :peek) [42 :domain:increment])
+              :handle (fn [event]
+                        (record event)
+                        (assert (= (handle event) 1)))
+              :ack (fn [id] (record (str "ack:" id)))
+              :render render
+              :wake (fn [] (record :wake))})
+  (assert (= (count (deref calls)) 5))
+  (assert (= (get (deref calls) 0) :peek))
+  (assert (= (get (deref calls) 1) :domain:increment))
+  (assert (= (get (deref calls) 2) "ack:42"))
+  (assert (= (get (deref calls) 3) "render:1"))
+  (assert (= (get (deref calls) 4) :wake)))
+; Один проход берёт ровно один элемент; следующий запускается отдельно.
+(let [pending (atom [[7 :domain:increment] [12 :domain:increment] [18 :domain:decrement]])
+      calls (atom [])
+      record (fn [value] (swap! calls (fn [xs] (conj xs value))))
+      io {:peek (fn [] (record :peek) (get (deref pending) 0))
+          :handle (fn [event] (record event))
+          :ack (fn [id]
+                 (record id)
+                 (swap! pending (fn [items] (drop 1 items))))
+          :render (fn [] (record :render))
+          :wake (fn [] (record :wake))}]
+  (run! (fn [[id event remaining]]
+          (reset! calls [])
+          (pump/step io)
+          (assert (= (count (deref pending)) remaining))
+          (assert (= (count (deref calls)) 5))
+          (assert (= (get (deref calls) 0) :peek))
+          (assert (= (get (deref calls) 1) event))
+          (assert (= (get (deref calls) 2) id))
+          (assert (= (get (deref calls) 3) :render))
+          (assert (= (get (deref calls) 4) :wake)))
+        [[7 :domain:increment 2] [12 :domain:increment 1] [18 :domain:decrement 0]])
+  (reset! calls [])
+  (pump/step io)
+  (assert (= (count (deref calls)) 1))
+  (assert (= (get (deref calls) 0) :peek)))
+"event pump order, single step and empty queue ok"

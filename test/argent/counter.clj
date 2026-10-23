@@ -1,5 +1,5 @@
 (ns argent.counter
-  (:require [argent.app :as app]
+  (:require [argent.application :as app]
             [argent.vendor.event :as event]
             [argent.vendor.effect :as fx]
             [argent.main :as main]))
@@ -70,6 +70,7 @@
         business (atom nil)
         messages (atom [])
         rendered (atom nil)
+        renders (atom 0)
         world (atom nil)
         operations (-> {:context :test-context}
                        (fx/register :ui:dispatch (fn [event] (reset! ui event) nil))
@@ -80,13 +81,19 @@
                                            (reset! world w)
                                            (swap! messages (fn [xs] (conj xs node)))
                                            :appended)))
-                       (fx/register :chat:render-message (fn [node] (reset! rendered node) nil)))
+                       (fx/register :chat:render-message
+                                    (fn [node]
+                                      (swap! renders (fn [n] (+ n 1)))
+                                      (reset! rendered node)
+                                      nil)))
         instance (app/create operations)
         handle (fx/summon instance :app:handle-event!)
         render (fx/summon instance :app:render!)]
     (assert (= (count (deref messages)) 0))
+    (assert (= (deref renders) 0))
     (assert (= ((fx/summon instance :app:start!)) nil))
     (assert (= (count (deref messages)) 1))
+    (assert (= (deref renders) 0))
     (assert (= (fx/summon (deref world) :context) :test-context))
     (assert (fx/summon (deref world) :domain:increment))
     (let [node (get (deref messages) 0)
@@ -95,19 +102,28 @@
       ((click) (deref world)))
     (assert (= (deref ui) nil))
     (assert (= (deref business) :domain:increment))
+    (assert (= (deref renders) 0))
     (render)
+    (assert (= (deref renders) 1))
     (assert (= (get-in (deref rendered) [2 3 1 :text]) "0"))
     (handle (deref business))
+    (assert (= (deref renders) 1))
+    (assert (= (count (deref messages)) 1))
     (assert (= (get-in (deref rendered) [2 3 1 :text]) "0"))
     (render)
+    (assert (= (deref renders) 2))
     (assert (= (get-in (deref rendered) [2 3 1 :text]) "1"))
     (((get-in (deref rendered) [3 1 :onclick])) instance)
     (assert (= (deref ui) :chat:new-message))
     (assert (= (handle (deref ui)) nil))
+    (assert (= (deref renders) 2))
     (assert (= (count (deref messages)) 2))
+    (assert (= (get-in (get (deref messages) 0) [2 3 1 :text]) "0"))
     (assert (= (get-in (get (deref messages) 1) [2 3 1 :text]) "1"))
     (let [second-instance (app/create operations)]
       ((fx/summon second-instance :app:start!))
       (assert (= (get-in (get (deref messages) 2) [2 3 1 :text]) "0")))
     (render)
+    (assert (= (deref renders) 3))
+    (assert (= (count (deref messages)) 3))
     (= (get-in (deref rendered) [2 3 1 :text]) "1")))

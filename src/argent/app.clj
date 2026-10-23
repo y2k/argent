@@ -1,8 +1,9 @@
 (ns argent.app
-  (:require [argent.main :as main]
+  (:require [argent.application :as application]
             [argent.vendor.event :as event]
             [argent.vendor.effect :as fx]
             [argent.vendor.event_queue :as queue]
+            [argent.vendor.event_pump :as event-pump]
             [argent.vendor.chat :as chat]
             [argent.vendor.qr_image :as qr])
   (:import [android.app Activity]
@@ -10,29 +11,8 @@
            [android.database.sqlite SQLiteDatabase]
            [android.widget Toast]))
 
-(defn create [env]
-  (let [state (atom (main/init))
-        app-env (main/main
-                 (-> env
-                     (fx/register :state:update (fn [f] (swap! state f)))
-                     (event/register :chat:new-message
-                                     (fn [_arg]
-                                       (fx/next (event/dispatch :state:update (fn [value] value))
-                                                (fn [current-state]
-                                                  (fx/next (event/dispatch :chat:append-message
-                                                                           (main/screen current-state))
-                                                           (fn [_result] (fx/pure nil)))))))))]
-    (merge app-env
-           {:app:start! (fn [] ((event/dispatch :ui:start nil) app-env))
-            :app:handle-event! (fn [event] ((event/dispatch event nil) app-env))
-            :app:render! (fn []
-                           ((fx/next (event/dispatch :state:update (fn [value] value))
-                                     (fn [current-state]
-                                       (event/dispatch :chat:render-message (main/screen current-state))))
-                            app-env)
-                           nil)})))
-
 (defn run [^Activity activity]
+  (eprintln "Argent app.start")
   ;; ponytail: short local operations run on main; move to a worker for slow effects.
   (let [^SQLiteDatabase db (queue/open activity)
         handler (Handler. (Looper/getMainLooper))
@@ -43,7 +23,7 @@
         wake (fn []
                (.post handler ^void:java.lang.Runnable
                       (fn [] ((deref pump)))))
-        instance (create
+        instance (application/create
                   (-> {:context activity}
                       (fx/register :qr:pick (fn [listener] ((:open qr-input) listener)))
                       (fx/register :ui:toast
@@ -56,29 +36,35 @@
                                    (fn [event]
                                      (.post handler ^void:java.lang.Runnable
                                             (fn []
+                                              (eprintln (str "Argent ui.handle.begin event=" event))
                                               ((fx/summon (deref application) :app:handle-event!) event)
-                                              ((fx/summon (deref application) :app:render!))))
+                                              (eprintln (str "Argent ui.handle.end event=" event))
+                                              ((fx/summon (deref application) :app:render!))
+                                              (eprintln (str "Argent render.end source=ui event=" event))))
+                                     (eprintln (str "Argent ui.enqueue event=" event))
                                      nil))
                       (fx/register :domain:dispatch
                                    (fn [event]
                                      (queue/push! db event)
+                                     (eprintln (str "Argent queue.enqueue event=" event))
                                      (wake)
                                      nil))))]
     (reset! application instance)
     (reset! pump
             (fn []
-              (if-let [item (queue/peek db)]
-                (let [[id event] item]
-                  ((fx/summon instance :app:handle-event!) event)
-                  (queue/ack! db id)
-                  ((fx/summon instance :app:render!))
-                  (wake)))))
+              (event-pump/step
+               {:peek (fn [] (queue/peek db))
+                :handle (fx/summon instance :app:handle-event!)
+                :ack (fn [id] (queue/ack! db id))
+                :render (fx/summon instance :app:render!)
+                :wake wake})))
     ((fx/summon instance :app:start!))
     (wake)
     {:stop (fn []
              ((:stop qr-input))
              (.removeCallbacksAndMessages handler nil)
              (.close db)
+             (eprintln "Argent app.stop")
              nil)}))
 
 (gen-class
