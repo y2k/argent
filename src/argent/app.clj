@@ -5,11 +5,11 @@
             [argent.vendor.event_queue :as queue]
             [argent.vendor.event_pump :as event-pump]
             [argent.vendor.chat :as chat]
-            [argent.vendor.qr_image :as qr])
+            [argent.vendor.qr_image :as qr]
+            [argent.vendor.toast :as toast])
   (:import [android.app Activity]
            [android.os Bundle Handler Looper]
-           [android.database.sqlite SQLiteDatabase]
-           [android.widget Toast]))
+           [android.database.sqlite SQLiteDatabase]))
 
 (defn run [^Activity activity]
   (eprintln "Argent app.start")
@@ -26,10 +26,7 @@
         instance (application/create
                   (-> {:context activity}
                       (fx/register :qr:pick (fn [listener] ((:open qr-input) listener)))
-                      (fx/register :ui:toast
-                                   (fn [text]
-                                     (.show (Toast/makeText activity (cast String text) 0))
-                                     nil))
+                      (toast/register activity)
                       (event/register :chat:append-message (:append-message output))
                       (event/register :chat:render-message (:render-message output))
                       (fx/register :ui:dispatch

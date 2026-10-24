@@ -1,5 +1,6 @@
 .DEFAULT_GOAL := build
 ANDROID_DEPENDENCIES := .build/bin/app/dependencies.gradle
+ANDROID_JAR ?= $(lastword $(sort $(wildcard $(shell android info sdk)/platforms/*/android.jar)))
 
 $(ANDROID_DEPENDENCIES): resources/android.clj
 	@ mkdir -p $(dir $@)
@@ -23,4 +24,4 @@ test:
 	@ mkdir -p .build/unit
 	@ ly2k --target eval < build-test.clj > .build/unit/Makefile
 	@ $(MAKE) -f .build/unit/Makefile build
-	@ java .build/unit/src/argent/checks/runner.java
+	@ java --class-path "$(ANDROID_JAR)" .build/unit/src/argent/checks/runner.java

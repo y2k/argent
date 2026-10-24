@@ -1,5 +1,6 @@
 (ns argent.main
-  (:require [argent.vendor.event :as event]))
+  (:require [argent.vendor.event :as event]
+            [argent.vendor.toast :as toast]))
 
 (defn init [] 0)
 
@@ -24,8 +25,7 @@
              :onclick (fn [] (event/dispatch :ui:dispatch :chat:new-message))}]
    [:qr-image-button {:text "Сканировать QR" :description "Scan QR"
                       :onresult (fn [{:err err :value value}]
-                                  (event/dispatch :ui:toast
-                                                  (case err
-                                                    :cancelled "Сканирование отменено"
-                                                    :scan-failed "Не удалось завершить сканирование"
-                                                    value)))}]])
+                                  (toast/show (case err
+                                                :cancelled "Сканирование отменено"
+                                                :scan-failed "Не удалось завершить сканирование"
+                                                value)))}]])
