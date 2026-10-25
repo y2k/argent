@@ -1,14 +1,13 @@
 (ns argent.vendor.toast
   (:require [argent.vendor.effect :as fx])
-  (:import [android.app Activity]
+  (:import [android.content Context]
            [android.widget Toast]))
 
 (defn show [text]
-  (fn [env]
-    ((fx/summon env :ui:toast) env text)))
+  (fx/call :ui:toast text))
 
-(defn register [env ^Activity activity]
+(defn register [env ^Context context]
   (fx/register env :ui:toast
                (fn [text]
-                 (.show (Toast/makeText activity (cast String text) 0))
+                 (.show (Toast/makeText context (cast String text) 0))
                  nil)))

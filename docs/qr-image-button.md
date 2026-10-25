@@ -8,11 +8,11 @@
 [:qr-image-button {:text "Сканировать QR"
                    :description "Scan QR"
                    :onresult (fn [{:err err :value value}]
-                               (fx/dispatch :ui:toast
-                                            (case err
-                                              :cancelled "Сканирование отменено"
-                                              :scan-failed "Не удалось завершить сканирование"
-                                              value)))}]
+                                (fx/call :ui:toast
+                                         (case err
+                                           :cancelled "Сканирование отменено"
+                                           :scan-failed "Не удалось завершить сканирование"
+                                           value)))}]
 ```
 
 Поддерживаются обычные атрибуты кнопки, включая `:compact`. Строка передаётся

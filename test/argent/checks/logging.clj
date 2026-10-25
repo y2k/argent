@@ -11,7 +11,7 @@
                 (fn []
                   (let [env (-> {}
                                 (fx/register :inner (fn [arg] arg))
-                                (event/register :outer (fn [arg] (event/dispatch :inner arg))))
+                                (event/register :outer (fn [arg] (fx/call :inner arg))))
                         call (event/dispatch :outer 42)]
                     (eprintln "before-execution")
                     (t/check "logging: operation result" (= (call env) 42))

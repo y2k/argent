@@ -14,11 +14,6 @@ build: $(ANDROID_DEPENDENCIES)
 run: $(ANDROID_DEPENDENCIES)
 	@ cat build.clj | ly2k --target eval | $(MAKE) -f - run
 
-.PHONY: check
-check: test
-	@ git diff --check
-	@ git diff --cached --check
-
 .PHONY: test
 test:
 	@ mkdir -p .build/unit

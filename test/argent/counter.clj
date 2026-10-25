@@ -43,13 +43,15 @@
 
 (defn messages []
   (let [seen (atom [])
+        pending (atom nil)
         w (main/main
            (-> {}
-               (event/register :ui:dispatch (fn [name] (event/dispatch name nil)))
-               (fx/register :chat:new-message
-                            (fn [arg] (swap! seen (fn [xs] (conj xs arg)))))))]
+               (fx/register :ui:dispatch (fn [name] (reset! pending name)))
+               (event/register :chat:new-message
+                               (fn [arg] (fx/pure (swap! seen (fn [xs] (conj xs arg))))))))]
     ((event/dispatch :ui:start nil) w)
     (((get-in (main/screen 0) [3 1 :onclick])) w)
+    ((event/dispatch (deref pending) nil) w)
     (and (= (count (deref seen)) 2)
          (= (get (deref seen) 0) nil)
          (= (get (deref seen) 1) nil))))
@@ -58,11 +60,7 @@
   (let [original (atom 7)
         replacement (atom 40)
         w (main/main (fx/register {} :state:update (fn [f] (swap! original f))))
-        other (-> (assoc w :state replacement)
-                  (event/register :state:update
-                                  (fn [f]
-                                    (fn [current-world]
-                                      (swap! (fx/summon current-world :state) f)))))
+        other (fx/register w :state:update (fn [f] (swap! replacement f)))
         result ((event/dispatch :domain:increment nil) other)]
     (and (= result 41) (= (deref replacement) 41) (= (deref original) 7))))
 
@@ -72,16 +70,13 @@
         messages (atom [])
         rendered (atom nil)
         renders (atom 0)
-        world (atom nil)
         operations (-> {:context :test-context}
                        (fx/register :ui:dispatch (fn [event] (reset! ui event) nil))
                        (fx/register :domain:dispatch (fn [event] (reset! business event) nil))
-                       (event/register :chat:append-message
-                                       (fn [node]
-                                         (fn [w]
-                                           (reset! world w)
-                                           (swap! messages (fn [xs] (conj xs node)))
-                                           :appended)))
+                       (fx/register :chat:append-message
+                                    (fn [node]
+                                      (swap! messages (fn [xs] (conj xs node)))
+                                      nil))
                        (fx/register :chat:render-message
                                     (fn [node]
                                       (swap! renders (fn [n] (+ n 1)))
@@ -95,12 +90,10 @@
     (t/check "counter: start result" (= ((fx/summon instance :app:start!)) nil))
     (t/check "counter: start appends" (= (count (deref messages)) 1))
     (t/check "counter: start does not render" (= (deref renders) 0))
-    (t/check "counter: current context" (= (fx/summon (deref world) :context) :test-context))
-    (t/check "counter: registered increment" (fx/summon (deref world) :domain:increment))
     (let [node (get (deref messages) 0)
           click (get-in node [2 2 1 :onclick])]
       (t/check "counter: initial text" (= (get-in node [2 3 1 :text]) "0"))
-      ((click) (deref world)))
+      ((click) instance))
     (t/check "counter: no UI event" (= (deref ui) nil))
     (t/check "counter: business event" (= (deref business) :domain:increment))
     (t/check "counter: click does not render" (= (deref renders) 0))

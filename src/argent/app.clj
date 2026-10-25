@@ -1,6 +1,5 @@
 (ns argent.app
   (:require [argent.application :as application]
-            [argent.vendor.event :as event]
             [argent.vendor.effect :as fx]
             [argent.vendor.event_queue :as queue]
             [argent.vendor.event_pump :as event-pump]
@@ -16,9 +15,9 @@
   ;; ponytail: short local operations run on main; move to a worker for slow effects.
   (let [^SQLiteDatabase db (queue/open activity)
         handler (Handler. (Looper/getMainLooper))
-        output (chat/start activity)
-        qr-input (qr/start activity)
         application (atom nil)
+        output (chat/start activity (fn [] (deref application)))
+        qr-input (qr/start activity)
         pump (atom nil)
         wake (fn []
                (.post handler ^void:java.lang.Runnable
@@ -27,8 +26,8 @@
                   (-> {:context activity}
                       (fx/register :qr:pick (fn [listener] ((:open qr-input) listener)))
                       (toast/register activity)
-                      (event/register :chat:append-message (:append-message output))
-                      (event/register :chat:render-message (:render-message output))
+                      (fx/register :chat:append-message (:append-message output))
+                      (fx/register :chat:render-message (:render-message output))
                       (fx/register :ui:dispatch
                                    (fn [event]
                                      (.post handler ^void:java.lang.Runnable
